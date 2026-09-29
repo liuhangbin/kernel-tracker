@@ -1,0 +1,114 @@
+{% extends "kernel_tracker/base.html" %}
+{% load committags %}
+{% load static %}
+
+{% block head_add %}
+<script src="{% static "kernel_tracker/tree.js" %}"></script>
+{% endblock %}
+
+{% block title %}{% if filter %}Patch filter
+{% elif series %}{{ series.description|capfirst }}
+{% elif path %}Patches modifying {{ path.path }}{% if tree %} in {{ tree.name }}{% endif %}
+{% elif tree %}Git commits in {{ tree.name }}
+{% else %}All commits
+{% endif %}{% endblock %}
+
+{% block content %}
+
+<div id="menu">
+<span class="menu_item"><a href="{% url 'index' %}" class="home">&#8962;</a></span>
+{% if not path and not filter %}
+<span class="tree_switcher tree_switcher_menu menu_item">
+<span class="tree_switcher_label">Switch to</span>
+<span class="tree_switcher_items">
+{% for t in trees %}
+{{ t|t_link }}
+{% endfor %}
+</span>
+</span>
+{% endif %}
+</div>
+
+<div class="tree_header">
+{% if filter %}
+<span class="tree_title">Patch filter</span>
+	<form method="GET" action="">
+	<div class="one_line">
+	<span class="form_item_fixed"><input type="submit" value="show"></span>
+	<span class="form_item_fixed">
+	patches in {% include "kernel_tracker/form_tree_switcher.html" with tree=tree input_name="tree" additional=form_add_tree %}
+	</span>
+	<span class="form_item_fixed form_item_sep">
+	not present in {% include "kernel_tracker/form_tree_switcher.html" with tree=notin input_name="notin" additional=form_add_notin %}
+	</span>
+	<span class="form_item_fixed form_item_sep">
+	that are:
+	</span>
+	<span class="form_item_fixed">
+	<input type="checkbox" name="fixes" value="1"{% if fixes %} checked{% endif %}>
+	fixes to pick
+	</span>
+	<span class="form_item_fixed form_item_optsep">
+	<input type="checkbox" name="unfixed" value="1"{% if unfixed %} checked{% endif %}>
+	in need of a fix
+	</span>
+	<span class="form_item_fixed form_item_optsep">
+	<input type="checkbox" name="partial" value="1"{% if partial %} checked{% endif %}>
+	partial backport
+	</span>
+	</div>
+	<div class="one_line">
+	<span class="form_item_fixed">with a path matching regex</span>
+	<span class="form_item_fill"><input type="text" name="path" value="{{ path|default:'' }}"></span>
+	<span class="form_item_fixed form_item_sep">but not regex</span>
+	<span class="form_item_fill"> <input type="text" name="excl" value="{{ excl|default:'' }}"></span>
+	</div>
+	<noscript><div class="attention">The form will not work with JavaScript disabled.</div></noscript>
+{% elif series %}
+<span class="tree_title">{{ series.description|capfirst }}</span>
+{% if series.link %}<a href="{{ series.link }}">{{ series.link }}</a>{% endif %}
+{% elif path %}
+<span class="tree_title">Patches modifying {{ path.path }}</span>
+	{% if tree %}
+	in {% include "kernel_tracker/form_tree_switcher.html" with tree=tree path=path.path %}
+	{% endif %}
+{% elif tree %}
+{{ tree|t_icon:"tree_icon tree_header_icon" }}
+<span class="tree_title">{{ tree.name }}</span>
+<span class="tree_location">{{ tree.get_kind_display }} tree {% if tree.origin %}(based on {{ tree.origin.version }}) {% endif %}at {{ tree.remote_url }}</span>
+{% else %}
+<span class="tree_title">All commits</span>
+{% endif %}
+{% if error %}<div class="attention">{{ error }}</div>{% endif %}
+</div>
+
+<div class="commit_list">
+{% for c in commits %}
+<div class="commit_item{% if c.is_merge %} merge{% endif %}">
+<span class="commit_id"><a href="{% url 'commit' c %}">{{ c|c_abbrev }}</a></span>
+<span class="commit_summary">
+	<span class="commit_subject">{% if c.series %}<a href="{% url 'series' c.series.head %}">{{ c.series|s_icon }}</a>
+	{% endif %}{{ c.subject }}</span>
+	<span class="commit_date">{{ c|c_commit_date|date:"Y-m-d" }}</span>
+	<span class="commit_author">{{ c|c_author_name }}</span>
+</span>
+<span class="commit_link">
+{% if filter or path %}
+{{ c|c_tree_selflink_first }}
+{% else %}
+{{ c|c_upstream_links }}
+{{ c|c_downstream_links }}
+{% endif %}
+{% if c.missing > 0 %}<span class="attention" title="{{ c.missing }} missing fix{{ c.missing|pluralize:"es" }}">!fix</span>{% endif %}
+{% if c.reverted_by %}<span class="attention" title="patch got reverted">&#9851;</span>{% endif %}
+</span>
+</div>
+{% endfor %}
+</div>
+
+<div class="pagination">
+<span class="pagination_page">page {{ commits.page }}</span><span class="pagination_links{% if not commits.has_next %} invisible{% endif %}">
+{% if commits.has_next %}<a href="?{{ commits.url }}">{% endif %}next &#9654;{% if commits.has_next %}</a>{% endif %}
+</span>
+</div>
+{% endblock %}

@@ -1,0 +1,102 @@
+#!/bin/bash
+# Integration test runner for kernel-tracker.
+# Uses TAP format: https://testanything.org/tap-specification.html
+
+set -e
+
+echo 'server = http://127.0.0.1/rpc/' > ~/.kernel_tracker
+
+export manage="python /opt/kernel-tracker/src/kernel_tracker/manage.py"
+home=/home/ktracking
+repo=$home/testrepo.git
+export repourl=file://$repo
+export git="git -C $repo"
+
+if [[ ! -e ${home} ]]; then
+    mkdir -p ${home}
+fi
+
+function expect()
+{
+    local result=$(< /dev/stdin)
+    if [[ "$result" = "$1" ]]; then
+        return 0
+    else
+        echo "Got \"$result\", expected \"$1\"."
+        return 1
+    fi
+}
+export -f expect
+
+function branch()
+{
+    local test_no=${current_test%%-*}
+    local branch_name=$1
+    local suffix=${2:+-$2}
+    $git branch -f $branch_name test-$test_no-$branch_name$suffix
+}
+export -f branch
+
+function update()
+{
+    $manage cron update
+}
+export -f update
+
+cd $home
+git init --bare $repo
+$git config user.email "test@example.org"
+$git config user.name "Test User"
+
+# Create initial commits for testing
+tmpdir=$(mktemp -d)
+cd $tmpdir
+git init
+git config user.email "test@example.org"
+git config user.name "Test User"
+
+echo "Initial content" > file1.txt
+git add file1.txt
+git commit -m "Initial commit"
+git tag test-001-vanilla
+
+echo "Second change" > file2.txt
+git add file2.txt
+git commit -m "Second commit"
+git tag test-001-linux-2
+
+# Push to bare repo
+git remote add origin $repourl
+git push origin main --tags 2>/dev/null || git push origin master --tags
+
+cd /opt/kernel-tracker/tests
+
+total=0
+failures=0
+
+for current_test in [0-9]*.sh; do
+    [[ ! -f "$current_test" ]] && continue
+    _stderr=$(mktemp)
+    export current_test
+    {
+        bash -e $current_test
+        result=$?
+    } 2> >(tee ${_stderr})
+    [[ -s ${_stderr} ]] && result=1
+    rm -f ${_stderr}
+    (( total++ ))
+    if [[ $result -ne 0 ]]; then
+        echo "not ok $total $current_test"
+        (( failures++ ))
+    else
+        echo "ok $total $current_test"
+    fi
+done
+
+echo "1..$total"
+
+if [[ $KERNEL_TRACKER_TESTS = debug ]]; then
+    sleep 1d
+fi
+
+exit $failures

@@ -1,0 +1,46 @@
+#!/bin/bash
+set -e
+
+VENV="/opt/kernel-tracker-venv"
+MANAGE="${VENV}/bin/manage"
+
+# Wait for the database to accept connections. Without MARIADB_HOST the
+# container falls back to SQLite, which needs no server.
+DB_HOST=${MARIADB_HOST:-}
+DB_PORT=${MARIADB_PORT:-3306}
+if [[ -n "${DB_HOST}" ]]; then
+    until nc -z "${DB_HOST}" "${DB_PORT}"; do
+        sleep 1
+    done
+fi
+
+# Run migrations
+${MANAGE} migrate --noinput
+
+# Collect static files
+${MANAGE} collectstatic --noinput
+
+# Logs and nginx temporary files live in the /data mount so that they survive
+# a rebuild. The mount starts out empty on a fresh host directory, so they are
+# created here; nginx runs as www-data and needs them writable.
+mkdir -p /data/log /data/tmp/client_body /data/tmp/proxy /data/tmp/fastcgi \
+         /data/tmp/uwsgi /data/tmp/scgi
+chmod 777 /data/log /data/tmp /data/tmp/*
+
+# Create the administrator account on the first start, together with a
+# random password. It is the only copy, so it goes to a root-only file
+# rather than to the world-readable log directory next to it.
+ADMIN_LOG=/data/log/admin.log
+touch "${ADMIN_LOG}"
+chmod 600 "${ADMIN_LOG}"
+${MANAGE} ensure_admin | tee -a "${ADMIN_LOG}"
+
+# Start gunicorn in background
+${VENV}/bin/gunicorn kernel_tracker.wsgi:application \
+    --bind 127.0.0.1:8000 \
+    --workers 4 \
+    --timeout 300 \
+    --log-file /data/log/gunicorn.log &
+
+# Start nginx in foreground
+exec nginx -g 'daemon off;'

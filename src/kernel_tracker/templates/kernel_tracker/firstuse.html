@@ -1,0 +1,25 @@
+{% extends "kernel_tracker/base.html" %}
+
+{% block title %}kernel-tracker{% endblock %}
+
+{% block content %}
+
+<h1>Welcome!</h1>
+
+<p>This is a new install of kernel-tracker. No trees have been added, yet.
+
+<p>To make this tool useful, you need to add some trees. The first one has to
+be the vanilla tree, the mainline everything else is compared against:
+
+<p class="commit_message">uv run manage tree add -u -V linux https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git
+uv run manage tree add -u net https://git.kernel.org/pub/scm/linux/kernel/git/netdev/net.git#main
+uv run manage tree add -d downstream https://gitlab.com/example/downstream.git#main
+
+<p>Then let the trees be fetched and processed (beware, it will take many
+hours):
+
+<p class="commit_message">uv run manage cron update -v</p>
+
+{% endblock %}
+
+{% block footer %}{% include "kernel_tracker/footer.html" %}{% endblock %}

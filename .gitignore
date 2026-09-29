@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Django
+*.sqlite3
+_static/
+staticfiles/
+src/static/
+_processing.lock
+
+# Local settings
+src/kernel_tracker/settings_local.py
+compose.yaml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Container
+db.sqlite3
+
+# Container bind mounts
+/data/
+/repos/
+
+# Data
+data.git/

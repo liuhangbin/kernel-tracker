@@ -1,0 +1,12 @@
+{% load committags %}
+<span class="tree_switcher tree_switcher_inline"><span class="tree_switcher_label">{% if not tree %}(nothing){% elif input_name %}{{ tree|t_name }}{% else %}{{ tree|t_link }}{% endif %}</span>
+{% if input_name %}<input type="hidden" name="{{ input_name }}" value="{% firstof tree.form_value tree.name %}">{% endif %}
+<span class="tree_switcher_items">
+{% for t in additional %}
+{% if input_name %}<span class="tree_link" onclick="tree_link_click(this, '{{ input_name }}', '{{ t.form_value }}');">{{ t|t_name }}</span>{% else %}{{ t|t_link_path:'' }}{% endif %}
+{% endfor %}
+{% for t in trees %}
+{% if input_name %}<span class="tree_link" onclick="tree_link_click(this, '{{ input_name }}', '{{ t.name }}');">{{ t|t_name }}</span>{% else %}{{ t|t_link_path:path }}{% endif %}
+{% endfor %}
+</span>
+</span>

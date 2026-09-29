@@ -1,0 +1,63 @@
+[project]
+name = "kernel-tracker"
+version = "0.1.0"
+description = "Track git trees, detect missing fixes, and monitor patch series"
+readme = "README.md"
+authors = [
+    { name = "Hangbin Liu", email = "liuhangbin@gmail.com" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "django>=5.1,<5.3",
+    "pygit2>=1.17",
+    "gunicorn",
+    "django-prometheus",
+]
+
+[project.optional-dependencies]
+# mysqlclient needs MariaDB/MySQL development headers to build, so it is
+# not a default dependency. Install the "mysql" extra for MariaDB
+# deployments (the container does this, see Containerfile).
+mysql = ["mysqlclient"]
+
+[project.scripts]
+manage = "kernel_tracker.manage:main"
+
+[build-system]
+requires = ["uv_build>=0.12.3,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.ruff]
+lint.ignore = [
+    "E501",  # long lines
+    # Django's declarative style requires mutable class attributes: ModelAdmin
+    # config (list_display, list_filter, search_fields), Meta options (ordering,
+    # unique_together), Field.default_validators and migration dependencies /
+    # operations are all class-level lists consumed by the framework.
+    "RUF012",  # mutable-class-default
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["kernel_tracker"]
+
+# Without this black infers a newer target than the interpreter and skips its
+# AST-equivalence safety check.
+[tool.black]
+target-version = ["py314"]
+
+# Dev tools live in a dependency-group, not in [project.optional-dependencies],
+# because `uv run` / `uv sync` install the default "dev" group automatically but
+# do not install extras. The tools would otherwise be missing from the venv.
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-django",
+    "ruff",
+    "black",
+]
+
+[tool.pytest.ini_options]
+# Without this pytest-django is not engaged: Django's TestCase would then run
+# against the real database configured in settings, which both fails on the
+# vanilla-tree constraint and writes test data into the development database.
+DJANGO_SETTINGS_MODULE = "kernel_tracker.settings"

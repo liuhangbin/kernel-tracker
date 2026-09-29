@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" role="img" aria-label="downstream">
+  <g fill="none" stroke="#1f2328" stroke-width="1.5">
+    <path d="M8 5.1v2.1"/>
+    <path d="M8 7.2C8 9.8 3.2 9.2 3.2 10.9"/>
+    <path d="M8 7.2C8 9.8 12.8 9.2 12.8 10.9"/>
+  </g>
+  <circle cx="8" cy="3" r="2.1" fill="#1f2328"/>
+  <circle cx="3.2" cy="13" r="2.1" fill="#1f2328"/>
+  <circle cx="12.8" cy="13" r="2.1" fill="#1f2328"/>
+</svg>

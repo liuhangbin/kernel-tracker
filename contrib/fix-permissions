@@ -1,0 +1,5 @@
+#!/bin/bash
+# Fix permissions for directories
+for dir in "$@"; do
+    chmod -R 777 "$dir" 2>/dev/null || true
+done

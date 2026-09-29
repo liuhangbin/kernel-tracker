@@ -1,0 +1,25 @@
+{% extends "kernel_tracker/base.html" %}
+{% load committags %}
+{% load utiltags %}
+
+{% block title %}kernel-tracker{% endblock %}
+
+{% block content %}
+
+<h1>Trees</h1>
+
+{% for t in trees %}
+{% ifchanged t.kind %}<p>{% endifchanged %}
+<span class="tree_list_item">
+{{ t|t_link }}
+{% if t.origin %}<span class="tree_origin">{{ t.origin.version }}</span>{% endif %}
+</span>
+{% endfor %}
+
+<h1>Tools</h1>
+
+<p><a href="{% url 'filter' %}">Patch filter</a>
+
+{% endblock %}
+
+{% block footer %}{% include "kernel_tracker/footer.html" %}{% endblock %}

@@ -1,0 +1,127 @@
+{% extends "kernel_tracker/base.html" %}
+{% load committags %}
+{% load utiltags %}
+
+{% block title %}{{ commit|c_abbrev }} {{ commit.subject }}{% endblock %}
+
+{% block content %}
+
+<div id="menu">
+<span class="menu_item"><a href="{% url 'index' %}" class="home">&#8962;</a></span>
+</div>
+
+<div class="commit_header">
+{{ commit|c_tree_links }} {{ commit.subject }}
+</div>
+
+<div class="commit_references">
+{% spaceless %}
+{% if commit.describe %}
+	<span class="commit_reference_box">{{ commit.describe }}</span>
+{% endif %}
+{% if commit.series %}
+	<span class="commit_reference_box commit_reference_box_important">Part of a <a href="{% url 'series' commit.series.head %}" class="series_link">{{ commit.series|s_icon }} {{ commit.series.get_kind_display }}</a></span>
+{% endif %}
+{% endspaceless %}
+</div>
+
+{% for c in commit.upstream.all %}
+{% if forloop.first %}
+<div class="commit_references">
+<div class="commit_reference_title">Upstream commits</div>
+{% endif %}
+<div><a href="{% url 'commit' c %}" class="commit_id">{{ c|c_abbrev }}</a>
+	{{ c|c_tree_selflinks }}
+	{% if c.describe or c.series %}({% endif %}{{ c.describe }}{% if c.describe and c.series %}, {% endif %}{% if c.series %}<a href="{% url 'series' c.series.head %}" class="series_link">&#128279; series</a>{% endif %}{% if c.describe or c.series %}){% endif %}
+	{{ c.subject }}</div>
+{% if forloop.last %}
+</div>
+{% endif %}
+{% endfor %}
+
+{% for c in commit.downstream.all %}
+{% if forloop.first %}
+<div class="commit_references">
+<div class="commit_reference_title">Backported as</div>
+{% endif %}
+<div><a href="{% url 'commit' c %}" class="commit_id">{{ c|c_abbrev }}</a> {{ c|c_tree_selflinks }} {{ c.subject }}</div>
+{% if forloop.last %}
+</div>
+{% endif %}
+{% endfor %}
+
+{% for cc in fixed_by %}
+{% with cc.commit as c %}
+{% if forloop.first %}
+<div class="commit_references">
+<div class="commit_reference_title">Fixed by</div>
+{% endif %}
+<div>{% if cc.missing %}<span class="attention">missing</span>{% endif %}
+{% if cc.kind == "" %}(referenced only)
+{% elif cc.kind == "r" %}<span class="attention" title="reverted by {{ c|c_abbrev }}">&#9851;</span>
+{% endif %}
+<a href="{% url 'commit' c %}" class="commit_id">{{ c|c_abbrev }}</a> {{ c|c_tree_selflinks }} {{ cc.downstream|t_list_links }} {% if c.describe %}({{ c.describe }}) {% endif %}{{ c.subject }}</div>
+{% if forloop.last %}
+</div>
+{% endif %}
+{% endwith %}
+{% endfor %}
+
+{% for cc in commit.fixing_info.all %}
+{% with cc.fixing as c %}
+{% if forloop.first %}
+<div class="commit_references">
+<div class="commit_reference_title">Fixing</div>
+{% endif %}
+<div>{% if cc.kind == "" %}(referenced only)
+{% elif cc.kind == "r" %}<span class="attention" title="revert of {{ c|c_abbrev }}">&#9851;</span>{% endif %}
+<a href="{% url 'commit' c %}" class="commit_id">{{ c|c_abbrev }}</a> {{ c|c_tree_selflinks }} {{ c|c_downstream_links }} {% if c.describe %}({{ c.describe }}) {% endif %}{{ c.subject }}</div>
+{% if forloop.last %}
+</div>
+{% endif %}
+{% endwith %}
+{% endfor %}
+
+<div class="commit_content">
+<table class="commit_metadata">
+<tr><th>commit</th><td colspan="2" class="commit_id">{{ commit.oid }}</td></tr>
+{% if commit.is_merge %}<tr><th>merge</th><td colspan="2">{% for p in commit.data.parent_ids %} <a href="{% url 'commit' p %}" class="commit_id">{{ p|c_abbrev }}</a>{% endfor %}</td></tr>
+{% endif %}<tr><th>author</th><td><a href="{% url 'author' commit|c_author_email %}">{{ commit|c_author }}</a></td><td>{{ commit|c_date|date:"Y-m-d H:i:s" }} UTC</td></tr>
+<tr class="committer_row"><th>committer</th><td>{{ commit|c_committer }}</td><td>{{ commit|c_commit_date|date:"Y-m-d H:i:s" }} UTC</td></tr>
+</table>
+
+<div class="commit_message">
+{{ commit|message_links }}</div>
+</div>
+
+{% if patch %}
+<div class="commit_content">
+<table class="diffstat">
+{% for f in patch %}
+<tr title="{{ f.added }} addition{{ f.added|pluralize }}, {{ f.removed }} deletion{{ f.removed|pluralize }}"><th><a href="#file{{ f.file_id }}">{% if not f.old_null %}{{ f.name }}{% else %}{{ f.new_name }}{% endif %}</a>{% if f.name != f.new_name and not f.old_null %}<span class="diffstat_newname">⇒ {{ f.new_name }}</span>{% endif %}</th>
+<td class="diffstat_sum">{{ f.changes }}</td>
+<td class="diffstat_bar"><span class="diffstat_add" style="width: {% widthratio f.added patch.max_changes 100 %}%;"></span><span class="diffstat_del" style="width: {% widthratio f.removed patch.max_changes 100 %}%;"></span></td></tr>
+{% endfor %}
+</table>
+</div>
+
+<div class="commit_content">
+{% for f in patch %}
+<div class="difffile" id="file{{ f.file_id }}">
+{% for h in f.headers %}
+<div class="diffline diffhdr{% if forloop.first %} diffhdr0{% endif %}">{{ h }}</div>
+{% endfor %}
+<div class="diffline diffhdr">--- {% if f.old_null %}/dev/null{% else %}a/<a href="{% url 'path' commit.main_tree_name f.name %}">{{ f.name }}</a>{% endif %}</div>
+<div class="diffline diffhdr">+++ {% if f.new_null %}/dev/null{% else %}b/<a href="{% url 'path' commit.main_tree_name f.new_name %}">{{ f.new_name }}</a>{% endif %}</div>
+{% for h in f %}
+<div class="diffline diffhunk">{{ h.header }}</div>
+{% for l in h %}
+<div class="diffline{% firstof l.origin|match:"+"|replace:" diffadd" l.origin|match:"-"|replace:" diffdel" %}">{{ l.origin }}{{ l.content }}</div>
+{% endfor %}
+{% endfor %}
+</div>
+{% endfor %}
+</div>
+{% endif %}
+
+{% endblock %}

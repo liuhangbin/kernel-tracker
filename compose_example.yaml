@@ -1,0 +1,58 @@
+services:
+  mariadb:
+    image: docker.io/mariadb:latest
+    container_name: kernel-tracker-mariadb
+    environment:
+      MARIADB_DATABASE: kernel_tracker
+      MARIADB_USER: kernel_tracker
+      MARIADB_PASSWORD: kernel_tracker
+      MARIADB_ROOT_PASSWORD: kernel_tracker
+    ports:
+      - "3306:3306"
+    volumes:
+      # ./data/mysql has to be empty on the first start so that MariaDB can
+      # initialize it. Add ",U" if it cannot be written to under rootless
+      # podman.
+      - ./data/mysql:/var/lib/mysql:z
+
+  kernel-tracker:
+    build:
+      dockerfile: Containerfile
+    image: kernel-tracker
+    environment:
+      # Shared bare repository the trees are fetched into. It lives in the
+      # /data mount below so that fetched objects survive a rebuild.
+      GIT_REPO: /data/data.git
+      # MariaDB. Drop these four variables, along with the mariadb service
+      # and the depends_on below, to fall back to SQLite: the database is
+      # then created next to data.git in the same mount, /data/db.sqlite3.
+      MARIADB_DATABASE: kernel_tracker
+      MARIADB_USER: kernel_tracker
+      MARIADB_PASSWORD: kernel_tracker
+      MARIADB_HOST: kernel-tracker-mariadb
+      MARIADB_PORT: "3306"
+      # Administrator created on the first start, when no superuser exists.
+      # ADMIN_PASSWORD is deliberately unset: a random one is generated and
+      # written to /data/log/admin.log.
+      ADMIN_NAME: admin
+      ADMIN_EMAIL: admin@localhost
+      # Accepted by the CSRF check. Only needed when something in front of
+      # the container rewrites the Host header, e.g. a TLS-terminating
+      # proxy; nginx.conf forwards the original one.
+      DJANGO_CSRF_TRUSTED_ORIGINS: http://localhost:8080,http://127.0.0.1:8080
+    volumes:
+      # The image carries the code (COPY . /opt/kernel-tracker), so source
+      # and settings changes need a rebuild: podman-compose build.
+      # Tracker state: the repository, the database, logs, temporary files
+      # and static files. Every setting below is read by
+      # contrib/settings_local.py from the environment.
+      - ./data:/data:z
+      # Git trees to track from the host. Point it at wherever your
+      # repositories live, e.g. LOCAL_GIT_DIR=/home/me/git, and add them by
+      # their in-container path: /git/myproject
+      - ${LOCAL_GIT_DIR:-./repos}:/git:ro,z
+    ports:
+      - "8080:80"
+      - "8443:8443"
+    depends_on:
+      - mariadb
