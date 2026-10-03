@@ -61,7 +61,15 @@ class SourceRepo:
                 self.oids[key],
             ],
             check=True,
-            env=dict(os.environ, GIT_COMMITTER_DATE=when, GIT_AUTHOR_DATE=when),
+            env=dict(
+                os.environ,
+                GIT_COMMITTER_DATE=when,
+                GIT_AUTHOR_DATE=when,
+                GIT_COMMITTER_NAME="Test User",
+                GIT_COMMITTER_EMAIL="test@example.org",
+                GIT_AUTHOR_NAME="Test User",
+                GIT_AUTHOR_EMAIL="test@example.org",
+            ),
         )
         return name
 

@@ -1,5 +1,7 @@
 # kernel-tracker
 
+[![CI](https://github.com/liuhangbin/kernel-tracker/actions/workflows/ci.yml/badge.svg)](https://github.com/liuhangbin/kernel-tracker/actions/workflows/ci.yml)
+
 Track git trees, detect missing fixes, and monitor patch series.
 
 Built on uv, Django 5.x and MariaDB, and **not limited to the Linux kernel** —
@@ -156,8 +158,7 @@ cp src/kernel_tracker/settings_example.py src/kernel_tracker/settings_local.py
 
 ## Container setup
 
-Runs gunicorn behind nginx with MariaDB. Requires pulling images from
-`docker.io`, so it will not work in environments where that registry is blocked.
+Runs gunicorn behind nginx with MariaDB.
 
 ```bash
 cp compose_example.yaml compose.yaml   # local settings, git-ignored; edit freely
@@ -167,6 +168,29 @@ make debug             # start and run the integration tests, leaving it up
 make attach            # shell inside the running container
 make log               # show the container error log
 make stop              # tear down
+```
+
+`.github/workflows/ci.yml` builds the image on every push and publishes it to
+`ghcr.io/liuhangbin/kernel-tracker`: `latest` on the default branch, the
+version for every `v*` tag, and a `sha-<short>` tag on every build. Pull
+requests build without pushing. To run a published image, drop the `build:` block of the
+`kernel-tracker` service in your `compose.yaml` and use it directly:
+
+```bash
+podman pull ghcr.io/liuhangbin/kernel-tracker:latest
+```
+
+```yaml
+    image: ghcr.io/liuhangbin/kernel-tracker:latest
+```
+
+Building locally needs the base image from `docker.io`, so it does not work
+where that registry is blocked. The version shown in the footer comes from the
+`KERNEL_TRACKER_VERSION` build argument:
+
+```bash
+podman build --build-arg KERNEL_TRACKER_VERSION=$(git describe --tags) \
+    -t kernel-tracker .
 ```
 
 The compose file maps `8080` (nginx) and `8443`. Database credentials are read

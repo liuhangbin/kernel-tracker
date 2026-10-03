@@ -1,0 +1,21 @@
+# Everything that is not source: the image only needs the code, and
+# COPY . /opt/kernel-tracker/ would otherwise send the whole directory,
+# including the MariaDB state under data/ and the local virtualenv.
+
+.git/
+.github/
+.venv/
+.pytest_cache/
+.ruff_cache/
+__pycache__/
+*.py[cod]
+
+data/
+repos/
+data.git/
+*.sqlite3
+
+# Local settings: compose.yaml is the copy of compose_example.yaml and
+# settings_local.py is installed from contrib/ during the build.
+compose.yaml
+src/kernel_tracker/settings_local.py
