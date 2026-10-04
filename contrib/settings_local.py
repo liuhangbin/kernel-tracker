@@ -7,6 +7,8 @@ them inside the /data volume.
 """
 
 import os
+import warnings
+import zoneinfo
 
 SECRET_KEY = os.environ.get(
     "DJANGO_SECRET_KEY", "container-dev-key-change-in-production"
@@ -33,6 +35,18 @@ ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
 VERSION = os.environ.get("KERNEL_TRACKER_VERSION", "container")
 
 # %__version__%
+
+# Zone used for every displayed timestamp and for the update schedule, taken
+# from the standard TZ variable (glibc honours it too, so the container clock
+# and its logs agree with the schedule). An unknown name would raise inside
+# Django and stop the container from starting, hence the check.
+_TZ = os.environ.get("TZ", "UTC")
+try:
+    zoneinfo.ZoneInfo(_TZ)
+    TIME_ZONE = _TZ
+except (KeyError, ValueError):
+    warnings.warn(f"unknown TZ '{_TZ}', falling back to UTC", stacklevel=2)
+    TIME_ZONE = "UTC"
 
 GIT_REPO = os.environ.get("GIT_REPO", "/data/data.git")
 

@@ -112,7 +112,9 @@ if not LOGGING:
     }
 
 LANGUAGE_CODE = "en-us"
-TIME_ZONE = "UTC"
+# Storage stays UTC (USE_TZ); this is the zone timestamps are displayed in and
+# the update schedule is read in. The container takes it from TZ.
+TIME_ZONE = getattr(sl, "TIME_ZONE", "UTC")
 USE_I18N = False
 USE_TZ = True
 

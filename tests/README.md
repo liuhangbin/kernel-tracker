@@ -15,6 +15,8 @@ Located in `tests/unit/`. Run with `uv run pytest tests/unit/`.
 | `test_dataview.py` | commit_list filters: tree, notin, path/excl, fixes, ordering |
 | `test_views.py` | Web view smoke tests (index, tree, filter, path, series, commit, health) |
 | `test_rpc.py` | get_missing_fixes / get_missing_series graph building |
+| `test_admin.py` | The tree list action starts `cron update` detached, and refuses to when one is running |
+| `test_schedule.py` | Update schedule row: singleton, defaults, due times, timezone |
 
 ### Pipeline Test (pytest)
 
@@ -22,6 +24,13 @@ Located in `tests/unit/`. Run with `uv run pytest tests/unit/`.
 runs the `tree add` and `cron update` management commands against it. It
 checks that commits, fix references, files, series and vanilla versions are
 recorded. Repository helpers live in `gitrepo.py`.
+
+`test_cron.py` checks which trees `cron update` processes with and without
+names on the command line. `test_cron_daemon.py` drives the scheduled loop
+with the update patched out and `time.sleep` standing in for waiting: nothing
+runs while the schedule is disabled, a due update runs once instead of every
+round, one already running is skipped, and a failing one does not stop the
+loop.
 
 `test_tree.py` exercises `tree delete` against a real (empty) tracker
 repository: the tree row and git remote are removed, commits survive, the

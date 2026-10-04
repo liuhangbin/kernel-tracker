@@ -16,6 +16,8 @@ _processing.lock
 # Local settings
 src/kernel_tracker/settings_local.py
 compose.yaml
+TODO.md
+build.sh
 
 # IDE
 .vscode/

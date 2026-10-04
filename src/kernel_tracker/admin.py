@@ -15,6 +15,7 @@ from kernel_tracker.models import (
     Series,
     Tree,
     TreeAlias,
+    UpdateSchedule,
     VanillaVersion,
 )
 from kernel_tracker.repository import repository
@@ -110,6 +111,30 @@ class FileAdmin(admin.ModelAdmin):
 @admin.register(TreeAlias)
 class TreeAliasAdmin(admin.ModelAdmin):
     list_display = ["tree", "url", "branch"]
+
+
+@admin.register(UpdateSchedule)
+class UpdateScheduleAdmin(admin.ModelAdmin):
+    """The one place where scheduled updates are turned on.
+
+    `last_run` is read-only so that the page also shows whether the updates
+    are actually happening.
+    """
+
+    list_display = ["enabled", "schedule", "last_run", "upcoming"]
+    readonly_fields = ["last_run"]
+
+    @admin.display(description="next update")
+    def upcoming(self, obj):
+        if obj.last_run is None:
+            return "as soon as it is enabled"
+        return obj.next_run()
+
+    def has_add_permission(self, request):
+        return not UpdateSchedule.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(MissingFix)

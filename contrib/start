@@ -42,5 +42,9 @@ ${VENV}/bin/gunicorn kernel_tracker.wsgi:application \
     --timeout 300 \
     --log-file /data/log/gunicorn.log &
 
+# Update the trees on the schedule from the admin, or do nothing while
+# scheduled updates are disabled there.
+${MANAGE} cron daemon >> /data/log/update.log 2>&1 &
+
 # Start nginx in foreground
 exec nginx -g 'daemon off;'

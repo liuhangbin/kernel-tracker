@@ -12,6 +12,7 @@ dependencies = [
     "pygit2>=1.17",
     "gunicorn",
     "django-prometheus",
+    "croniter>=6.2.4",
 ]
 
 [project.optional-dependencies]

@@ -129,9 +129,31 @@ Things to know:
 - The branch defaults to `main`. Append `#<branch>` to the URL to track
   something else.
 - `cron update` is what actually walks commits and records fixes, series, files
-  and tags. Run it whenever you want to pick up new commits; in production it
-  is the job you put in crontab.
+  and tags. Run it whenever you want to pick up new commits; keeping it on a
+  schedule is either an entry in your crontab or, inside the container, the
+  schedule described in [Scheduled updates](#scheduled-updates).
 - A file lock (`_processing.lock` by default) prevents two runs at once.
+
+## Scheduled updates
+
+`cron daemon` updates every tree whenever the schedule says so, which means
+the container can keep itself current without anything outside it:
+
+```bash
+uv run manage cron daemon      # stay on the schedule
+uv run manage cron daemon --once
+```
+
+Nothing happens until the schedule is enabled in the admin: **Update
+schedule** has one row, with the *enable scheduled updates* box (off by
+default), the cron expression (`0 * * * *`, every hour) and the time of the
+last update. Changes apply to the running daemon within a minute, there is
+nothing to restart.
+
+The expression is read in the configured timezone — see `TZ` below — so
+`0 3 * * *` means three in the morning there, not in UTC. `cron update` and
+the update action on the tree list are unaffected and still run on demand; the
+file lock keeps them from overlapping a scheduled run.
 
 ## Configuration
 
@@ -155,6 +177,7 @@ cp src/kernel_tracker/settings_example.py src/kernel_tracker/settings_local.py
 | `GIT_REPO` | bare repo the tracker fetches into (default `src/data.git`) |
 | `PROCESSING_LOCK_FILE` | lock file used by `cron update` |
 | `STATIC_DIR` | `collectstatic` target |
+| `TIME_ZONE` | zone for displayed timestamps and the update schedule (default `UTC`) |
 
 ## Container setup
 
@@ -162,7 +185,7 @@ Runs gunicorn behind nginx with MariaDB.
 
 ```bash
 cp compose_example.yaml compose.yaml   # local settings, git-ignored; edit freely
-make start             # build and start, waits for http://localhost:8080/health
+make start             # pull the image and start, waits for http://localhost:8080/health
 make integration-test  # start, run tests/run inside the container, tear down
 make debug             # start and run the integration tests, leaving it up
 make attach            # shell inside the running container
@@ -173,20 +196,22 @@ make stop              # tear down
 `.github/workflows/ci.yml` builds the image on every push and publishes it to
 `ghcr.io/liuhangbin/kernel-tracker`: `latest` on the default branch, the
 version for every `v*` tag, and a `sha-<short>` tag on every build. Pull
-requests build without pushing. To run a published image, drop the `build:` block of the
-`kernel-tracker` service in your `compose.yaml` and use it directly:
-
-```bash
-podman pull ghcr.io/liuhangbin/kernel-tracker:latest
-```
+requests build without pushing. The compose file runs that published image:
 
 ```yaml
     image: ghcr.io/liuhangbin/kernel-tracker:latest
 ```
 
-Building locally needs the base image from `docker.io`, so it does not work
-where that registry is blocked. The version shown in the footer comes from the
-`KERNEL_TRACKER_VERSION` build argument:
+and it is fetched on first start, or refreshed with:
+
+```bash
+podman pull ghcr.io/liuhangbin/kernel-tracker:latest
+```
+
+Replace it with a `build: {dockerfile: Containerfile}` block to run your own
+build of the source tree. Building needs the base image from `docker.io`, so
+it does not work where that registry is blocked. The version shown in the
+footer comes from the `KERNEL_TRACKER_VERSION` build argument:
 
 ```bash
 podman build --build-arg KERNEL_TRACKER_VERSION=$(git describe --tags) \
@@ -197,6 +222,11 @@ The compose file maps `8080` (nginx) and `8443`. Database credentials are read
 from the `MARIADB_*` environment variables in `compose_example.yaml`. Remove
 those variables (and the `mariadb` service with its `depends_on`) and the
 container falls back to SQLite.
+
+The container runs nginx (in the foreground) with gunicorn behind it, and
+`cron daemon` next to them, so it keeps its own trees up to date once that is
+enabled in the admin; see [Scheduled updates](#scheduled-updates). Its output
+goes to `./data/log/update.log`.
 
 The state lives in host directories, bind mounted into the containers:
 
@@ -223,6 +253,7 @@ so there is no file to edit or mount.
 | `MARIADB_DATABASE`/`_USER`/`_PASSWORD`/`_HOST`/`_PORT` | `kernel_tracker`… | MariaDB; setting `MARIADB_HOST` switches off SQLite |
 | `STATIC_DIR` | `/data/static` | `collectstatic` target served at `/static/` |
 | `PROCESSING_LOCK_FILE` | `/data/tmp/processing.lock` | lock file used by `cron update` |
+| `TZ` | `UTC` | time zone of displayed timestamps and of the update schedule, e.g. `Asia/Shanghai`; also sets the container clock. An unknown name falls back to UTC |
 | `DJANGO_SECRET_KEY` | dev key | **change before deploying** |
 | `DJANGO_DEBUG` | `1` | set to `0` for production behaviour |
 | `DJANGO_ALLOWED_HOSTS` | `*` | comma-separated host names |
@@ -236,7 +267,8 @@ A fresh deployment is ready to use: the bare repository is created on first
 access, and `contrib/start` runs `ensure_admin`, which creates the first
 account and writes its generated password to `./data/log/admin.log`, readable
 by root only. Log in at `/admin/` and add trees there, then fetch them with
-`cron update` or with the action on the tree list.
+`cron update` or with the action on the tree list. To have that happen on its
+own, enable it on the **Update schedule** page.
 
 Both survive a container rebuild. Point the second one at wherever your
 repositories live and add them by their in-container path:
@@ -256,6 +288,7 @@ podman-compose exec kernel-tracker manage tree add -u -V local /git/myproject#ma
 | `manage tree alias` | add/remove alternate URLs for a tree |
 | `manage tree show` | list tracked trees (aliases `ls`, `list`) |
 | `manage cron update [tree ...]` | fetch and process new commits, for all trees or only the named ones |
+| `manage cron daemon [--once]` | keep updating the trees on the schedule from the admin |
 | `manage fsck` | consistency check |
 | `manage ensure_admin` | create the administrator unless one already exists |
 
@@ -267,7 +300,7 @@ podman-compose exec kernel-tracker manage tree add -u -V local /git/myproject#ma
 | `/tree/<name>/` | commit list for a tree |
 | `/commit/<oid>/` | single commit view |
 | `/series/<id>/`, `/filter/`, `/path/<tree>/<path>/` | filtered views |
-| `/admin/` | Django admin: add and change trees, and update them from the tree list |
+| `/admin/` | Django admin: add and change trees, update them from the tree list, and enable scheduled updates |
 | `/health` | health check |
 | `/rpc/<method>/` | JSON-RPC endpoint |
 

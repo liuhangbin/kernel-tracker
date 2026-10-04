@@ -46,3 +46,7 @@ DBLITE = os.path.join(BASE_DIR, "db.sqlite3")
 
 # Static files directory
 STATIC_DIR = os.path.join(BASE_DIR, "static")
+
+# Zone used for displayed timestamps and for the update schedule. The container
+# reads TZ from the environment instead, see contrib/settings_local.py.
+TIME_ZONE = "UTC"

@@ -9,10 +9,16 @@ Core entities:
 - File: file paths touched by commits
 - VanillaVersion: maps git tags to commits
 - TreeAlias: alternate URLs for a tree
+- UpdateSchedule: when the trees are updated on their own
 """
 
+from datetime import datetime
+
+from croniter import croniter
+from django.core.exceptions import ValidationError
 from django.db import models, transaction
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.functional import cached_property
 
 from kernel_tracker import utils
@@ -441,6 +447,76 @@ class File(models.Model):
 
     def __str__(self):
         return self.path
+
+
+class UpdateSchedule(models.Model):
+    """When the trees are fetched and processed on their own.
+
+    A single row, edited in the admin: scheduled updates are off until
+    someone enables them there. `manage cron update` and the update action
+    on the tree list are unaffected and still work on demand.
+    """
+
+    enabled = models.BooleanField("enable scheduled updates", default=False)
+    schedule = models.CharField(
+        "cron expression",
+        max_length=100,
+        default="0 * * * *",
+        help_text="every hour by default, in the configured timezone",
+    )
+    last_run = models.DateTimeField("last update", blank=True, null=True)
+
+    class Meta:
+        verbose_name = "update schedule"
+
+    def __str__(self):
+        if not self.enabled:
+            return f"{self.schedule} (scheduled updates disabled)"
+        return self.schedule
+
+    @classmethod
+    def get(cls):
+        """Return the only schedule row, creating it with defaults."""
+        schedule, _ = cls.objects.get_or_create(pk=1)
+        return schedule
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    def clean(self):
+        super().clean()
+        if not croniter.is_valid(self.schedule):
+            raise ValidationError(
+                {"schedule": f"'{self.schedule}' is not a valid cron expression."}
+            )
+
+    def next_run(self):
+        """Return the first scheduled time after the last update.
+
+        Times are in the configured timezone, so `0 3 * * *` means three in
+        the morning there, not in UTC.
+        """
+        start = timezone.localtime(self.last_run or timezone.now())
+        upcoming = croniter(self.schedule, start).get_next(datetime)
+        if timezone.is_naive(upcoming):
+            return timezone.make_aware(upcoming, timezone.get_current_timezone())
+        return upcoming
+
+    def due(self, now=None):
+        """Return True if an update is owed."""
+        if self.last_run is None:
+            return True
+        return (now or timezone.localtime()) >= self.next_run()
+
+    def record_run(self):
+        """Remember that a scheduled cycle fired.
+
+        Called even when the update failed or was skipped, so that the next
+        attempt happens on schedule instead of every polling round.
+        """
+        self.last_run = timezone.now()
+        self.save()
 
 
 class TreeAlias(models.Model):
