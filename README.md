@@ -146,8 +146,9 @@ uv run manage cron daemon --once
 
 Nothing happens until the schedule is enabled in the admin: **Update
 schedule** has one row, with the *enable scheduled updates* box (off by
-default), the cron expression (`0 * * * *`, every hour) and the time of the
-last update. Changes apply to the running daemon within a minute, there is
+default), the cron expression (`0 * * * *`, every hour), the time of the last
+update, and the end of the update log described below. Reload the page to
+follow a run; changes apply to the running daemon within a minute, there is
 nothing to restart.
 
 The expression is read in the configured timezone — see `TZ` below — so
@@ -226,7 +227,9 @@ container falls back to SQLite.
 The container runs nginx (in the foreground) with gunicorn behind it, and
 `cron daemon` next to them, so it keeps its own trees up to date once that is
 enabled in the admin; see [Scheduled updates](#scheduled-updates). Its output
-goes to `./data/log/update.log`.
+goes to `./data/log/update.log`, and so does the progress of an update started
+from the tree list, which runs in the background the same way. Both are shown
+on the **Update schedule** page, where the tail of that file is displayed.
 
 The state lives in host directories, bind mounted into the containers:
 
@@ -239,6 +242,40 @@ The state lives in host directories, bind mounted into the containers:
 Everything except the git trees lives in `./data`, so a single directory holds
 the whole state of a deployment. `./data/mysql` must be empty the first time
 MariaDB starts so that it can initialize the database there.
+
+### Running as your own user
+
+By default both services run as root inside their container. Under rootless
+podman that root is mapped to your own account, so `./data` is already yours,
+but the processes still hold every privilege inside the container. To run the
+tracker as UID and GID 1000 instead, add to its service:
+
+```yaml
+    user: "1000:1000"
+    # Maps the container's UID 1000 to the host's, so ./data stays writable.
+    userns_mode: "keep-id"
+    # nginx listens on port 80, which a non-root process may not bind.
+    cap_add:
+      - NET_BIND_SERVICE
+```
+
+All three matter:
+
+- `userns_mode: "keep-id"` is what keeps `./data` usable. Without it the
+  container's UID 1000 lands on a subuid that cannot write the bind mount, and
+  `migrate` fails with `unable to open database file`.
+- Port 80 needs the capability, or
+  `--sysctl net.ipv4.ip_unprivileged_port_start=0`, or an nginx configuration
+  that listens above 1024. Without one of them nginx exits with
+  `bind() to 0.0.0.0:80 failed (13: Permission denied)`.
+- nginx logs `the "user" directive makes sense only if the master process runs
+  with super-user privileges, ignored` and its workers run as UID 1000. That is
+  expected: the directories it writes under `/data` are world-writable.
+
+Leave the `mariadb` service as it is unless you want to convert its data
+directory too: MariaDB initializes `./data/mysql` as the `mysql` user of its
+own image, so that service starts as UID 1000 only after
+`chown -R 1000:1000 data/mysql`, or with a fresh empty directory.
 
 ### Container settings
 
@@ -253,6 +290,7 @@ so there is no file to edit or mount.
 | `MARIADB_DATABASE`/`_USER`/`_PASSWORD`/`_HOST`/`_PORT` | `kernel_tracker`… | MariaDB; setting `MARIADB_HOST` switches off SQLite |
 | `STATIC_DIR` | `/data/static` | `collectstatic` target served at `/static/` |
 | `PROCESSING_LOCK_FILE` | `/data/tmp/processing.lock` | lock file used by `cron update` |
+| `UPDATE_LOG` | `/data/log/update.log` | progress of `cron daemon` and of the update started from the tree list, shown on the update schedule page |
 | `TZ` | `UTC` | time zone of displayed timestamps and of the update schedule, e.g. `Asia/Shanghai`; also sets the container clock. An unknown name falls back to UTC |
 | `DJANGO_SECRET_KEY` | dev key | **change before deploying** |
 | `DJANGO_DEBUG` | `1` | set to `0` for production behaviour |
