@@ -133,6 +133,10 @@ PROCESSING_LOCK_FILE = getattr(
     sl, "PROCESSING_LOCK_FILE", os.path.join(BASE_DIR, "_processing.lock")
 )
 
+# Where the update started from the admin writes its progress. Empty means it
+# inherits the output of whatever started it instead.
+UPDATE_LOG = getattr(sl, "UPDATE_LOG", "")
+
 # Administrator created by the ensure_admin command when none exists yet.
 ADMIN_NAME = getattr(sl, "ADMIN_NAME", "admin")
 ADMIN_EMAIL = getattr(sl, "ADMIN_EMAIL", "")

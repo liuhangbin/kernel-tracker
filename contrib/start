@@ -43,8 +43,9 @@ ${VENV}/bin/gunicorn kernel_tracker.wsgi:application \
     --log-file /data/log/gunicorn.log &
 
 # Update the trees on the schedule from the admin, or do nothing while
-# scheduled updates are disabled there.
-${MANAGE} cron daemon >> /data/log/update.log 2>&1 &
+# scheduled updates are disabled there. Unbuffered, so that the tail of the
+# log shown on the update schedule page is up to date while it runs.
+PYTHONUNBUFFERED=1 ${MANAGE} cron daemon >> /data/log/update.log 2>&1 &
 
 # Start nginx in foreground
 exec nginx -g 'daemon off;'

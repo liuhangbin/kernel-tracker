@@ -54,6 +54,10 @@ PYGIT_WORKAROUNDS = os.environ.get("PYGIT_WORKAROUNDS", "1") == "1"
 
 PROCESSING_LOCK_FILE = os.environ.get("PROCESSING_LOCK_FILE", "/data/tmp/processing.lock")
 
+# Progress of the update started from the admin. contrib/start sends `cron
+# daemon` to the same file, so both land in one place.
+UPDATE_LOG = os.environ.get("UPDATE_LOG", "/data/log/update.log")
+
 STATIC_DIR = os.environ.get("STATIC_DIR", "/data/static")
 
 # SQLite is used unless the MARIADB_* variables are set (compose_example.yaml).

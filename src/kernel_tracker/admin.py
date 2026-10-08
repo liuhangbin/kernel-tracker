@@ -3,8 +3,11 @@
 import os
 import subprocess
 import sys
+from contextlib import ExitStack
 
+from django.conf import settings
 from django.contrib import admin, messages
+from django.utils.html import format_html
 
 from kernel_tracker import models, processing
 from kernel_tracker.models import (
@@ -20,6 +23,22 @@ from kernel_tracker.models import (
 )
 from kernel_tracker.repository import repository
 
+# How much of the update log the admin page shows. Only the tail is read, so
+# it costs the same whatever the file has grown to.
+LOG_TAIL = 4096
+
+
+def update_log_tail():
+    """The end of the update log, as text, or "" when there is none yet."""
+    if not settings.UPDATE_LOG or not os.path.exists(settings.UPDATE_LOG):
+        return ""
+    with open(settings.UPDATE_LOG, "rb") as log:
+        size = log.seek(0, os.SEEK_END)
+        log.seek(max(size - LOG_TAIL, 0))
+        tail = log.read().decode("utf-8", "replace")
+    # Reading from the middle starts inside a line; drop that fragment.
+    return tail.split("\n", 1)[-1] if size > LOG_TAIL else tail
+
 
 @admin.register(Tree)
 class TreeAdmin(admin.ModelAdmin):
@@ -33,7 +52,9 @@ class TreeAdmin(admin.ModelAdmin):
         """Update the selected trees in a process of their own.
 
         The work takes as long as `cron update` does, so it is started
-        detached and the page comes back immediately.
+        detached and the page comes back immediately. Its progress goes to
+        `settings.UPDATE_LOG`, the file `cron daemon` writes to as well, so
+        that it can be followed after the page is gone.
         """
         names = list(queryset.values_list("name", flat=True))
         if processing.is_running():
@@ -41,16 +62,29 @@ class TreeAdmin(admin.ModelAdmin):
                 request, "Another update is already running.", messages.WARNING
             )
             return
-        subprocess.Popen(
-            [
-                sys.executable,
-                os.path.join(os.path.dirname(__file__), "manage.py"),
-                "cron",
-                "update",
-                *names,
-            ],
-            start_new_session=True,
-        )
+        # The child keeps its own copy of the descriptor once it is started, so
+        # the file is closed again as soon as it exists.
+        with ExitStack() as stack:
+            output = (
+                stack.enter_context(open(settings.UPDATE_LOG, "a"))
+                if settings.UPDATE_LOG
+                else None
+            )
+            subprocess.Popen(
+                [
+                    sys.executable,
+                    # Unbuffered: the log file only shows progress as it
+                    # happens if it is not held in a block buffer.
+                    "-u",
+                    os.path.join(os.path.dirname(__file__), "manage.py"),
+                    "cron",
+                    "update",
+                    *names,
+                ],
+                stdout=output,
+                stderr=output,
+                start_new_session=True,
+            )
         self.message_user(
             request, f"Updating {', '.join(names)} in the background.", messages.SUCCESS
         )
@@ -122,13 +156,21 @@ class UpdateScheduleAdmin(admin.ModelAdmin):
     """
 
     list_display = ["enabled", "schedule", "last_run", "upcoming"]
-    readonly_fields = ["last_run"]
+    readonly_fields = ["last_run", "log"]
 
     @admin.display(description="next update")
     def upcoming(self, obj):
         if obj.last_run is None:
             return "as soon as it is enabled"
         return obj.next_run()
+
+    @admin.display(description="update log")
+    def log(self, obj):
+        """The tail of what `cron daemon` and the tree list action wrote."""
+        tail = update_log_tail()
+        if not tail:
+            return "Nothing written yet."
+        return format_html('<pre style="overflow: auto">{}</pre>', tail)
 
     def has_add_permission(self, request):
         return not UpdateSchedule.objects.exists()

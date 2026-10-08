@@ -15,7 +15,7 @@ Located in `tests/unit/`. Run with `uv run pytest tests/unit/`.
 | `test_dataview.py` | commit_list filters: tree, notin, path/excl, fixes, ordering |
 | `test_views.py` | Web view smoke tests (index, tree, filter, path, series, commit, health) |
 | `test_rpc.py` | get_missing_fixes / get_missing_series graph building |
-| `test_admin.py` | The tree list action starts `cron update` detached, and refuses to when one is running |
+| `test_admin.py` | The tree list action starts `cron update` detached writing to `UPDATE_LOG`, and refuses to when one is running; the update schedule page shows the tail of that log |
 | `test_schedule.py` | Update schedule row: singleton, defaults, due times, timezone |
 
 ### Pipeline Test (pytest)
